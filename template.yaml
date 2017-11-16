@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ThingFinder streams video from iOS via Kinesis to Lambda and Rekognition then texts you back what it sees
+
+
+Parameters:
+  SMSRecipient:
+    Type: String
+    Description: Enter the cell phone number of the SMS recipient for alerts (probably your number)
+
+Resources:
+  StreamProcessor:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs6.10
+      CodeUri: s3://publicserverlessexperiments/ThingFinder.zip
+      Timeout: 20
+      Role: !GetAtt FunctionNameRole.Arn
+      Environment: 
+        Variables:
+          SNSTopicName: !Ref SNSService
+      Events:
+        Stream:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt Stream.Arn
+            StartingPosition: LATEST
+            BatchSize: 1
+
+  Stream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 1
+
+  SNSService:
+    Type: AWS::SNS::Topic
+    Properties: 
+      Subscription:
+        - 
+          Endpoint: !Ref SMSRecipient
+          Protocol: "sms"
+
+  UserPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      AllowUnauthenticatedIdentities: True
+
+  UserPoolIdentityMapping:
+    Type: "AWS::Cognito::IdentityPoolRoleAttachment"
+    Properties:
+      IdentityPoolId: !Ref UserPool
+      Roles: 
+        unauthenticated: !GetAtt ClientRole.Arn
+
+  ClientPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: "ThingFinderClientPolicy"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Action: 
+              - "kinesis:PutRecord"
+              - "kinesis:PutRecords"
+            Resource: !GetAtt Stream.Arn
+          -
+            Effect: "Allow"
+            Action: 
+              - "mobileanalytics:PutEvents"
+              - "cognito-sync:*"
+            Resource: "*"
+      Roles:
+        - !Ref ClientRole
+
+  ClientRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: 
+              Federated: "cognito-identity.amazonaws.com"
+            Action: 
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals: 
+                "cognito-identity.amazonaws.com:aud": !Ref UserPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": unauthenticated
+                            
+  FunctionNameRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - "arn:aws:iam::aws:policy/AmazonRekognitionReadOnlyAccess"
+        - "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
+        - "arn:aws:iam::aws:policy/AmazonKinesisReadOnlyAccess"
+
