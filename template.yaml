@@ -6,7 +6,7 @@ Description: ThingFinder streams video from iOS via Kinesis to Lambda and Rekogn
 Parameters:
   SMSRecipient:
     Type: String
-    Description: Enter the cell phone number of the SMS recipient for alerts (probably your number)
+    Description: Enter the cell phone number of the SMS recipient for alerts (probably your number, dont forget the + prefix)
 
 Resources:
   StreamProcessor:
@@ -105,9 +105,44 @@ Resources:
                 - "lambda.amazonaws.com"
             Action: 
               - "sts:AssumeRole"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-        - "arn:aws:iam::aws:policy/AmazonRekognitionReadOnlyAccess"
-        - "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
-        - "arn:aws:iam::aws:policy/AmazonKinesisReadOnlyAccess"
-
+      Policies:
+        -
+          PolicyName: "ThingFinderFunctionPolicy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - 
+                Effect: "Allow"
+                Action: 
+                  - "support:*"
+                Resource: "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "rekognition:CompareFaces"
+                  - "rekognition:DetectFaces"
+                  - "rekognition:DetectLabels"
+                  - "rekognition:ListCollections"
+                  - "rekognition:ListFaces"
+                  - "rekognition:SearchFaces"
+                  - "rekognition:SearchFacesByImage"
+                Resource: "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "sns:*"
+                Resource: "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "kinesis:Get*"
+                  - "kinesis:List*"
+                  - "kinesis:Describe*"
+                Resource: "*"
